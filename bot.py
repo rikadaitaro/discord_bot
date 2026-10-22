@@ -359,6 +359,30 @@ async def on_ready():
 
     scheduler.start()
 
+@bot.event
+async def on_message(message):
+
+    if message.author.bot:
+        return
+
+    text = message.content
+
+    if "すぎ" in text:
+
+        before = text.split("すぎ")[0]
+
+        await message.channel.send(
+            f"お前{before}スギ"
+        )
+    elif "過ぎ" in text:
+
+        before = text.split("過ぎ")[0]
+
+        await message.channel.send(
+            f"お前{before}スギ"
+        )
+
+    await bot.process_commands(message)
 
 @bot.command()
 async def tantou(ctx):
