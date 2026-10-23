@@ -502,4 +502,147 @@ async def exclude_error(ctx, error):
             "❌ このコマンドは管理者のみ使用できます。"
         )
 
+@bot.command()
+async def profile(ctx, member: discord.Member = None):
+    # メンションがなければ、コマンドを使った本人を表示
+    if member is None:
+        member = ctx.author
+
+    scores = load_scores()
+    member_id = str(member.id)
+
+    # その人の評価記録がない場合
+    if member_id not in scores or len(scores[member_id]) == 0:
+        await ctx.send(
+            f"📭 {member.display_name} さんには、"
+            "まだ授業評価の記録がありません。"
+        )
+        return
+
+    member_scores = scores[member_id]
+
+    average_score = sum(member_scores) / len(member_scores)
+    highest_score = max(member_scores)
+    lowest_score = min(member_scores)
+    latest_score = member_scores[-1]
+    evaluation_count = len(member_scores)
+
+    # 全員の平均点を計算してランキングを作る
+    ranking_data = []
+
+    for user_id, score_list in scores.items():
+        if not score_list:
+            continue
+
+        user_average = sum(score_list) / len(score_list)
+
+        ranking_data.append({
+            "user_id": user_id,
+            "average": user_average
+        })
+
+    # 平均点が高い順
+    ranking_data.sort(
+        key=lambda item: item["average"],
+        reverse=True
+    )
+
+    rank = None
+
+    for index, item in enumerate(ranking_data, start=1):
+        if item["user_id"] == member_id:
+            rank = index
+            break
+
+    # 前回との変化
+    if len(member_scores) >= 2:
+        previous_score = member_scores[-2]
+        score_change = latest_score - previous_score
+
+        if score_change > 0:
+            change_text = f"📈 +{score_change:.2f}"
+        elif score_change < 0:
+            change_text = f"📉 {score_change:.2f}"
+        else:
+            change_text = "➡️ 変化なし"
+    else:
+        change_text = "初回のため比較なし"
+
+    # 順位に応じた表示
+    if rank == 1:
+        rank_text = "🥇 1位"
+    elif rank == 2:
+        rank_text = "🥈 2位"
+    elif rank == 3:
+        rank_text = "🥉 3位"
+    else:
+        rank_text = f"🏆 {rank}位"
+
+    embed = discord.Embed(
+        title=f"👤 {member.display_name} さんの授業プロフィール",
+        color=discord.Color.blue()
+    )
+
+    embed.set_thumbnail(url=member.display_avatar.url)
+
+    embed.add_field(
+        name="現在順位",
+        value=rank_text,
+        inline=True
+    )
+
+    embed.add_field(
+        name="総合平均",
+        value=f"⭐ {average_score:.2f} / 5.00",
+        inline=True
+    )
+
+    embed.add_field(
+        name="評価された回数",
+        value=f"📚 {evaluation_count}回",
+        inline=True
+    )
+
+    embed.add_field(
+        name="最高評価",
+        value=f"🚀 {highest_score:.2f}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="最低評価",
+        value=f"🔻 {lowest_score:.2f}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="前回評価",
+        value=f"🕒 {latest_score:.2f}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="前回からの変化",
+        value=change_text,
+        inline=False
+    )
+
+    # 最近5回分
+    recent_scores = member_scores[-5:]
+    recent_text = "\n".join(
+        f"{index}. {score:.2f}"
+        for index, score in enumerate(
+            reversed(recent_scores),
+            start=1
+        )
+    )
+
+    embed.add_field(
+        name="最近の評価",
+        value=recent_text,
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+
 bot.run(TOKEN)
