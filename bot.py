@@ -195,48 +195,45 @@ async def finish_vote():
     channel = guild.get_channel(CHANNEL_ID)
 
     data = load_data()
-
     target_id = data["current_member_id"]
 
     if target_id is None:
         return
 
     member = guild.get_member(target_id)
-
     votes = load_votes()
 
-if len(votes) == 0:
-    await channel.send(
-        f"{member.display_name} さん\n"
-        "投票がありませんでした。"
+    if len(votes) == 0:
+        await channel.send(
+            f"{member.display_name} さん\n"
+            "投票がありませんでした。"
+        )
+        return
+
+    average = round(
+        sum(votes.values()) / len(votes),
+        2
     )
-    return
 
-average = round(
-    sum(votes.values()) / len(votes),
-    2
-)
+    scores = load_scores()
 
-scores = load_scores()
+    if str(target_id) not in scores:
+        scores[str(target_id)] = {
+            "name": member.display_name,
+            "total": 0,
+            "count": 0
+        }
 
-if str(target_id) not in scores:
+    scores[str(target_id)]["total"] += average
+    scores[str(target_id)]["count"] += 1
 
-    scores[str(target_id)] = {
-        "name": member.display_name,
-        "total": 0,
-        "count": 0
-    }
+    save_scores(scores)
 
-scores[str(target_id)]["total"] += average
-scores[str(target_id)]["count"] += 1
-
-save_scores(scores)
-
-await channel.send(
-    f"📊 {member.display_name} さんの評価\n"
-    f"平均点: {average}/5\n"
-    f"投票数: {len(votes)}"
-)
+    await channel.send(
+        f"📊 {member.display_name} さんの評価\n"
+        f"平均点: {average}/5\n"
+        f"投票数: {len(votes)}"
+    )
 
 @bot.command()
 async def ranking(ctx):
