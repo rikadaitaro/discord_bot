@@ -27,17 +27,35 @@ EXCLUDE_MESSAGE_FILE = "exclude_message.json"
 def load_data():
     if os.path.exists(FILE_NAME):
         with open(FILE_NAME, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # 古いtantou.jsonにも自動対応
+        if "current_index" not in data:
+            data["current_index"] = -1
+
+        if "current_member_id" not in data:
+            data["current_member_id"] = None
+
+        if "member_order" not in data:
+            data["member_order"] = []
+
+        return data
 
     return {
         "current_index": -1,
-        "current_member_id": None
+        "current_member_id": None,
+        "member_order": []
     }
 
 
 def save_data(data):
     with open(FILE_NAME, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+        json.dump(
+            data,
+            f,
+            ensure_ascii=False,
+            indent=4
+        )
 
 def load_votes():
     if os.path.exists(VOTES_FILE):
@@ -304,33 +322,70 @@ async def get_excluded_users(guild):
 
 
 async def get_valid_members(guild):
-    excluded = await get_excluded_users(guild)
+    excluded_ids = await get_excluded_users(guild)
+    data = load_data()
 
-    return [
-        m for m in guild.members
-        if not m.bot and m.id not in excluded
-    ]
+    ordered_members = []
+    registered_ids = set()
+
+    # 設定された順番で追加
+    for member_id in data["member_order"]:
+        member = guild.get_member(int(member_id))
+
+        if member is None:
+            continue
+
+        if member.bot:
+            continue
+
+        if member.id in excluded_ids:
+            continue
+
+        ordered_members.append(member)
+        registered_ids.add(member.id)
+
+    # 順番に未登録のメンバーは最後に追加
+    for member in guild.members:
+        if member.bot:
+            continue
+
+        if member.id in excluded_ids:
+            continue
+
+        if member.id in registered_ids:
+            continue
+
+        ordered_members.append(member)
+
+    return ordered_members
 
 
 async def update_member(guild):
     members = await get_valid_members(guild)
 
-    if len(members) == 0:
+    if not members:
         return None
 
     data = load_data()
+    current_member_id = data.get("current_member_id")
 
-    next_index = (data["current_index"] + 1) % len(members)
+    current_position = -1
 
-    selected = members[next_index]
+    # 現在の担当者が候補内にいる場合
+    for index, member in enumerate(members):
+        if member.id == current_member_id:
+            current_position = index
+            break
 
-    data["current_index"] = next_index
+    next_position = (current_position + 1) % len(members)
+    selected = members[next_position]
+
+    data["current_index"] = next_position
     data["current_member_id"] = selected.id
 
     save_data(data)
 
     return selected
-
 
 async def weekly_member():
     guild = bot.guilds[0]
@@ -673,5 +728,134 @@ async def profile(ctx, member: discord.Member = None):
     )
 
     await ctx.send(embed=embed)
+    
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setorder(ctx, *members: discord.Member):
+    if len(members) == 0:
+        await ctx.send(
+            "❌ 順番に設定するメンバーをメンションしてください。\n\n"
+            "使用例：\n"
+            "`!setorder @鈴木 @田中 @佐藤`"
+        )
+        return
+
+    # 同じ人が複数回指定されていないか確認
+    member_ids = [member.id for member in members]
+
+    if len(member_ids) != len(set(member_ids)):
+        await ctx.send(
+            "❌ 同じメンバーが複数回指定されています。"
+        )
+        return
+
+    # Botが指定されていないか確認
+    bot_members = [
+        member.display_name
+        for member in members
+        if member.bot
+    ]
+
+    if bot_members:
+        await ctx.send(
+            "❌ Botは担当順に登録できません。\n"
+            + "\n".join(
+                f"・{name}"
+                for name in bot_members
+            )
+        )
+        return
+
+    data = load_data()
+    data["member_order"] = member_ids
+
+    # 現在の担当者が未設定の場合だけ初期状態にする
+    if data["current_member_id"] is None:
+        data["current_index"] = -1
+
+    save_data(data)
+
+    order_text = "\n".join(
+        f"{index}. {member.display_name}"
+        for index, member in enumerate(members, start=1)
+    )
+
+    await ctx.send(
+        "✅ 担当順を更新しました！\n\n"
+        f"{order_text}"
+    )
+    
+@bot.command(name="order")
+async def show_order(ctx):
+    data = load_data()
+    member_order = data.get("member_order", [])
+
+    if not member_order:
+        await ctx.send(
+            "📭 担当順はまだ設定されていません。\n"
+            "管理者が `!setorder @メンバー1 @メンバー2` "
+            "で設定できます。"
+        )
+        return
+
+    excluded_ids = await get_excluded_users(ctx.guild)
+    lines = []
+
+    for index, member_id in enumerate(member_order, start=1):
+        member = ctx.guild.get_member(int(member_id))
+
+        if member is None:
+            lines.append(
+                f"{index}. 不明なメンバー"
+            )
+            continue
+
+        if member.id in excluded_ids:
+            status = "🚫 除外中"
+        elif member.id == data.get("current_member_id"):
+            status = "📍 現在の担当"
+        else:
+            status = ""
+
+        lines.append(
+            f"{index}. {member.display_name} {status}".rstrip()
+        )
+
+    await ctx.send(
+        "📋 担当順\n\n"
+        + "\n".join(lines)
+    )
+
+@setorder.error
+async def setorder_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(
+            "❌ 担当順を変更できるのは管理者だけです。"
+        )
+
+    elif isinstance(error, commands.MemberNotFound):
+        await ctx.send(
+            "❌ メンバーが見つかりませんでした。\n"
+            "名前ではなくメンションで指定してください。"
+        )
+
+
+@removeorder.error
+async def removeorder_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(
+            "❌ 担当順から削除できるのは管理者だけです。"
+        )
+
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(
+            "❌ 削除するメンバーを指定してください。\n"
+            "使用例：`!removeorder @鈴木`"
+        )
+
+    elif isinstance(error, commands.MemberNotFound):
+        await ctx.send(
+            "❌ 指定されたメンバーが見つかりません。"
+        )
 
 bot.run(TOKEN)
