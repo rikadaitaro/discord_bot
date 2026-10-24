@@ -169,8 +169,10 @@ class RatingView(discord.ui.View):
 
 async def start_vote():
 
-    guild = bot.guilds[0]
-    channel = guild.get_channel(CHANNEL_ID)
+    channel = bot.get_channel(CHANNEL_ID)
+
+    if channel is None:
+        channel = await bot.fetch_channel(CHANNEL_ID)
 
     data = load_data()
 
@@ -179,6 +181,7 @@ async def start_vote():
     if target_id is None:
         return
 
+    guild = bot.guilds[0]
     member = guild.get_member(target_id)
 
     save_votes({})
