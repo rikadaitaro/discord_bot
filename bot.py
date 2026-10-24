@@ -6,6 +6,8 @@ import os
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = 1562368847389130782
+EXCLUDE_CHANNEL_ID = 1562492446892621835
+EXCLUDE_MESSAGE_ID = 1561915350554247242
 
 intents = discord.Intents.default()
 intents.members = True
@@ -258,30 +260,47 @@ async def ranking(ctx):
     await ctx.send(text)
 
 async def get_excluded_users(guild):
-    if not os.path.exists(EXCLUDE_MESSAGE_FILE):
+    channel = guild.get_channel(EXCLUDE_CHANNEL_ID)
+
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(EXCLUDE_CHANNEL_ID)
+        except discord.NotFound:
+            print("除外設定のチャンネルが見つかりません。")
+            return set()
+        except discord.Forbidden:
+            print("除外設定のチャンネルを見る権限がありません。")
+            return set()
+        except discord.HTTPException as error:
+            print(f"チャンネルの取得に失敗しました: {error}")
+            return set()
+
+    try:
+        message = await channel.fetch_message(EXCLUDE_MESSAGE_ID)
+
+    except discord.NotFound:
+        print("除外設定メッセージが見つかりません。")
         return set()
 
-    with open(EXCLUDE_MESSAGE_FILE, "r") as f:
-        message_id = json.load(f)["message_id"]
+    except discord.Forbidden:
+        print("除外設定メッセージを読む権限がありません。")
+        return set()
 
-    for channel in guild.text_channels:
-        try:
-            message = await channel.fetch_message(message_id)
+    except discord.HTTPException as error:
+        print(f"除外設定メッセージの取得に失敗しました: {error}")
+        return set()
 
-            excluded = set()
+    excluded_users = set()
 
-            for reaction in message.reactions:
-                if str(reaction.emoji) == "✅":
-                    async for user in reaction.users():
-                        if not user.bot:
-                            excluded.add(user.id)
+    for reaction in message.reactions:
+        if str(reaction.emoji) != "✅":
+            continue
 
-            return excluded
+        async for user in reaction.users():
+            if not user.bot:
+                excluded_users.add(user.id)
 
-        except:
-            pass
-
-    return set()
+    return excluded_users
 
 
 async def get_valid_members(guild):
@@ -446,21 +465,31 @@ async def skip(ctx):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def exclude(ctx):
-    msg = await ctx.send(
-        "✅を押すと担当候補から除外されます。"
-    )
+    try:
+        channel = await bot.fetch_channel(EXCLUDE_CHANNEL_ID)
+        message = await channel.fetch_message(EXCLUDE_MESSAGE_ID)
 
-    await msg.add_reaction("✅")
-
-    with open(EXCLUDE_MESSAGE_FILE, "w") as f:
-        json.dump(
-            {"message_id": msg.id},
-            f
+        await ctx.send(
+            "✅ 除外設定メッセージはこちらです。\n"
+            f"{message.jump_url}"
         )
 
-    await ctx.send(
-        "除外設定メッセージを作成しました。"
-    )
+    except discord.NotFound:
+        await ctx.send(
+            "❌ 除外設定メッセージが見つかりません。\n"
+            "チャンネルIDとメッセージIDを確認してください。"
+        )
+
+    except discord.Forbidden:
+        await ctx.send(
+            "❌ Botに除外設定メッセージを見る権限がありません。"
+        )
+
+    except discord.HTTPException as error:
+        await ctx.send(
+            f"❌ メッセージの取得中にエラーが発生しました。\n"
+            f"`{error}`"
+        )
 
 @bot.command()
 async def excluded(ctx):
