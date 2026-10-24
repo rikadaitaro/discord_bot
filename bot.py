@@ -22,6 +22,10 @@ bot = commands.Bot(
     intents=intents
 )
 
+scheduler = AsyncIOScheduler(
+    timezone=ZoneInfo("Asia/Tokyo")
+)
+
 FILE_NAME = "tantou.json"
 EXCLUDE_MESSAGE_FILE = "exclude_message.json"
 
@@ -201,25 +205,17 @@ async def finish_vote():
 
     votes = load_votes()
 
-    if len(votes) == 0:
-
-        await channel.send(
-            f"{member.display_name} さん\n"
-            "投票がありませんでした。"
-        )
-
-        selected = await update_member(guild)
-
-        if selected:
-            await channel.send(
-                f"📢 今週の担当は {selected.mention} さんです"
-            )
+if len(votes) == 0:
+    await channel.send(
+        f"{member.display_name} さん\n"
+        "投票がありませんでした。"
+    )
     return
 
-    average = round(
-        sum(votes.values()) / len(votes),
-        2
-    )
+average = round(
+    sum(votes.values()) / len(votes),
+    2
+)
 
     scores = load_scores()
 
@@ -391,7 +387,6 @@ async def update_member(guild):
 
 async def weekly_member():
     guild = bot.guilds[0]
-
     channel = guild.get_channel(CHANNEL_ID)
 
     selected = await update_member(guild)
@@ -407,37 +402,41 @@ async def weekly_member():
 @bot.event
 async def on_ready():
     print(f"ログイン: {bot.user}")
-
-    if not scheduler.running:
-        scheduler.start()
-        print("Scheduler Started (JST)")
-    scheduler = AsyncIOScheduler(
-    timezone=ZoneInfo("Asia/Tokyo")
-    )
     print(datetime.now(ZoneInfo("Asia/Tokyo")))
+
+    if scheduler.running:
+        return
+
+    scheduler.add_job(
+        weekly_member,
+        trigger="cron",
+        day_of_week="sat",
+        hour=11,
+        minute=0,
+        id="weekly_member"
+    )
+
     scheduler.add_job(
         start_vote,
         trigger="cron",
         day_of_week="sat",
         hour=23,
-        minute=0
-        )
+        minute=0,
+        id="start_vote"
+    )
+
     scheduler.add_job(
         finish_vote,
         trigger="cron",
         day_of_week="sun",
         hour=23,
-        minute=0
-        )
-    scheduler.add_job(
-        weekly_member,
-        trigger="cron",
-        day_of_week="sun",
-        hour=23,
-        minute=1
-        )
+        minute=0,
+        id="finish_vote"
+    )
 
+    scheduler.start()
 
+    print("Scheduler Started (JST)")
 @bot.event
 async def on_message(message):
 
@@ -509,14 +508,11 @@ async def tadokoro(ctx):
 
 @bot.command()
 async def today(ctx):
-    await announce_today_member()
-    await ctx.send("今日の担当を表示しました。")
+    await weekly_member()
 
 @bot.command()
 async def vote(ctx):
-    await send_vote_message()
-    await ctx.send("投票メッセージを送信しました。")
-
+    await start_vote()
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def skip(ctx):
