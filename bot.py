@@ -217,26 +217,26 @@ average = round(
     2
 )
 
-    scores = load_scores()
+scores = load_scores()
 
-    if str(target_id) not in scores:
+if str(target_id) not in scores:
 
-        scores[str(target_id)] = {
-            "name": member.display_name,
-            "total": 0,
-            "count": 0
-        }
+    scores[str(target_id)] = {
+        "name": member.display_name,
+        "total": 0,
+        "count": 0
+    }
 
-    scores[str(target_id)]["total"] += average
-    scores[str(target_id)]["count"] += 1
+scores[str(target_id)]["total"] += average
+scores[str(target_id)]["count"] += 1
 
-    save_scores(scores)
+save_scores(scores)
 
-    await channel.send(
-        f"📊 {member.display_name} さんの評価\n"
-        f"平均点: {average}/5\n"
-        f"投票数: {len(votes)}"
-    )
+await channel.send(
+    f"📊 {member.display_name} さんの評価\n"
+    f"平均点: {average}/5\n"
+    f"投票数: {len(votes)}"
+)
 
 @bot.command()
 async def ranking(ctx):
