@@ -840,13 +840,6 @@ async def setorder_error(ctx, error):
         )
 
 
-@removeorder.error
-async def removeorder_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send(
-            "❌ 担当順から削除できるのは管理者だけです。"
-        )
-
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send(
             "❌ 削除するメンバーを指定してください。\n"
