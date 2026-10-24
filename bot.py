@@ -169,6 +169,19 @@ class RatingView(discord.ui.View):
 
 async def start_vote():
 
+    guild = bot.guilds[0]
+
+    print("Guild:", guild.name)
+    print("CHANNEL_ID:", CHANNEL_ID)
+
+    channel = guild.get_channel(CHANNEL_ID)
+
+    print("Channel:", channel)
+
+    if channel is None:
+        print("チャンネル取得失敗")
+        return
+
     channel = bot.get_channel(CHANNEL_ID)
 
     if channel is None:
