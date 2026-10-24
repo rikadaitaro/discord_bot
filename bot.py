@@ -3,6 +3,8 @@ from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import json
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = 1562368847389130782
@@ -403,8 +405,6 @@ async def weekly_member():
 
 
 @bot.event
-from datetime import datetime
-from zoneinfo import ZoneInfo
 async def on_ready():
     print(f"ログイン: {bot.user}")
 
