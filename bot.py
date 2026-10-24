@@ -420,30 +420,30 @@ from zoneinfo import ZoneInfo
 
 print(datetime.now(ZoneInfo("Asia/Tokyo")))
 
-    scheduler.add_job(
-        start_vote,
-        trigger="cron",
-        day_of_week="sat",
-        hour=23,
-        minute=0
-        )
-    scheduler.add_job(
-        finish_vote,
-        trigger="cron",
-        day_of_week="sun",
-        hour=23,
-        minute=0
-        )
-    scheduler.add_job(
-        weekly_member,
-        trigger="cron",
-        day_of_week="sun",
-        hour=23,
-        minute=1
-        )
+scheduler.add_job(
+    start_vote,
+    trigger="cron",
+    day_of_week="sat",
+    hour=23,
+    minute=0
+    )
+scheduler.add_job(
+    finish_vote,
+    trigger="cron",
+    day_of_week="sun",
+    hour=23,
+    minute=0
+    )
+scheduler.add_job(
+    weekly_member,
+    trigger="cron",
+    day_of_week="sun",
+    hour=23,
+    minute=1
+    )
 
 
-    scheduler.start()
+scheduler.start()
 
 @bot.event
 async def on_message(message):
