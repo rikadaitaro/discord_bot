@@ -403,10 +403,22 @@ async def weekly_member():
 
 
 @bot.event
+@bot.event
 async def on_ready():
-    print(f"{bot.user} が起動しました")
+    print(f"ログイン: {bot.user}")
 
-    scheduler = AsyncIOScheduler()
+    if not scheduler.running:
+        scheduler.start()
+        print("Scheduler Started (JST)")
+
+scheduler = AsyncIOScheduler(
+    timezone=ZoneInfo("Asia/Tokyo")
+)
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+print(datetime.now(ZoneInfo("Asia/Tokyo")))
 
     scheduler.add_job(
         start_vote,
@@ -502,6 +514,15 @@ async def tadokoro(ctx):
         file=discord.File("tadokoro.jpeg")
     )
 
+@bot.command()
+async def today(ctx):
+    await announce_today_member()
+    await ctx.send("今日の担当を表示しました。")
+
+@bot.command()
+async def vote(ctx):
+    await send_vote_message()
+    await ctx.send("投票メッセージを送信しました。")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
