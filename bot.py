@@ -411,38 +411,32 @@ async def on_ready():
     if not scheduler.running:
         scheduler.start()
         print("Scheduler Started (JST)")
-
-scheduler = AsyncIOScheduler(
+    scheduler = AsyncIOScheduler(
     timezone=ZoneInfo("Asia/Tokyo")
-)
-
-
-print(datetime.now(ZoneInfo("Asia/Tokyo")))
-
-scheduler.add_job(
-    start_vote,
-    trigger="cron",
-    day_of_week="sat",
-    hour=23,
-    minute=0
     )
-scheduler.add_job(
-    finish_vote,
-    trigger="cron",
-    day_of_week="sun",
-    hour=23,
-    minute=0
-    )
-scheduler.add_job(
-    weekly_member,
-    trigger="cron",
-    day_of_week="sun",
-    hour=23,
-    minute=1
-    )
+    print(datetime.now(ZoneInfo("Asia/Tokyo")))
+    scheduler.add_job(
+        start_vote,
+        trigger="cron",
+        day_of_week="sat",
+        hour=23,
+        minute=0
+        )
+    scheduler.add_job(
+        finish_vote,
+        trigger="cron",
+        day_of_week="sun",
+        hour=23,
+        minute=0
+        )
+    scheduler.add_job(
+        weekly_member,
+        trigger="cron",
+        day_of_week="sun",
+        hour=23,
+        minute=1
+        )
 
-
-scheduler.start()
 
 @bot.event
 async def on_message(message):
