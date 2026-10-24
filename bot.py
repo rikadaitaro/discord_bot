@@ -403,7 +403,8 @@ async def weekly_member():
 
 
 @bot.event
-@bot.event
+from datetime import datetime
+from zoneinfo import ZoneInfo
 async def on_ready():
     print(f"ログイン: {bot.user}")
 
@@ -415,8 +416,6 @@ scheduler = AsyncIOScheduler(
     timezone=ZoneInfo("Asia/Tokyo")
 )
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 print(datetime.now(ZoneInfo("Asia/Tokyo")))
 
