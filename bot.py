@@ -1165,7 +1165,7 @@ async def roulette(ctx):
         message = await ctx.send("？？？")
 
         # 名前だけを高速 → ゆっくりに切り替える（約3.7秒、編集7回）
-        delays = [0.35, 0.35, 0.4, 0.45, 0.55, 0.7, 0.9]
+        delays = [0.2, 0.2, 0.2, 0.2, 0.25, 0.3, 0.45, 0.8, 1.0]
         index = random.randrange(len(members))
         for delay in delays:
             await asyncio.sleep(delay)
