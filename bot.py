@@ -1147,10 +1147,23 @@ async def show_order(ctx):
     await ctx.send("📋 担当順\n\n" + "\n".join(lines))
 
 def _roulette_font(size):
-    """日本語が描けるフォントを探す（Windows / Mac / Linux）。"""
+    """日本語が描けるフォントを探す。
+
+    最優先は bot.py と同じフォルダに置いた roulette_font.ttf。
+    環境のフォントに頼らないので、これが一番確実。
+    見つからなければ OS のフォントを探し、それも無ければ警告を出す
+    （load_default は日本語が出ず、文字も小さい）。
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
+        os.path.join(base_dir, "roulette_font.ttf"),
+        os.path.join(base_dir, "roulette_font.otf"),
+        os.path.join(base_dir, "roulette_font.ttc"),
+        "C:/Windows/Fonts/YuGothB.ttc",
         "C:/Windows/Fonts/YuGothM.ttc",
+        "C:/Windows/Fonts/meiryob.ttc",
         "C:/Windows/Fonts/meiryo.ttc",
+        "C:/Windows/Fonts/msgothic.ttc",
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
         "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
@@ -1159,10 +1172,15 @@ def _roulette_font(size):
     for path in candidates:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, size)
+                font = ImageFont.truetype(path, size)
+                print(f"ルーレット用フォント: {path}")
+                return font
             except OSError:
                 continue
+
+    print("⚠️ 日本語フォントが見つかりません。bot.py と同じフォルダに roulette_font.ttf を置いてください。")
     return ImageFont.load_default()
+
 
 
 def make_roulette_gif(names, selected_index):
@@ -1171,10 +1189,11 @@ def make_roulette_gif(names, selected_index):
     送信は1回だけ。再生は見る側のアプリがやるので、編集よりずっと滑らか。
     ループ再生される前提で、最後に止まった状態を長めに見せる。
     """
-    width, height = 720, 320
-    row_h = 72
+    width, height = 600, 360
+    row_h = 84
     center_y = height // 2
-    font = _roulette_font(40)
+    font = _roulette_font(56)
+
     bg = (43, 45, 49)
 
     # 2周回してから、選ばれた名前が中央に来る位置で止まる
