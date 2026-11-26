@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -1141,6 +1142,41 @@ async def show_order(ctx):
         lines.append(f"{index}. {member.display_name} {status}".rstrip())
 
     await ctx.send("📋 担当順\n\n" + "\n".join(lines))
+
+@bot.command()
+async def roulette(ctx):
+    """ランダムなメンバーの名前を、回転演出付きで出すだけ。
+
+    担当・投票・保存は一切しない。出すのは名前だけで、メンションもしない。
+    """
+    members = await get_valid_members(ctx.guild)
+
+    if not members:
+        await ctx.send("候補がいません。")
+        return
+
+    selected = random.choice(members)
+
+    if len(members) == 1:
+        await ctx.send(selected.display_name)
+        return
+
+    try:
+        message = await ctx.send("？？？")
+
+        # 名前だけを高速 → ゆっくりに切り替える（約3.7秒、編集7回）
+        delays = [0.35, 0.35, 0.4, 0.45, 0.55, 0.7, 0.9]
+        index = random.randrange(len(members))
+        for delay in delays:
+            await asyncio.sleep(delay)
+            index = (index + 1) % len(members)
+            await message.edit(content=members[index].display_name)
+
+        await asyncio.sleep(1.0)
+        await message.edit(content=selected.display_name)
+    except discord.HTTPException:
+        # 編集が失敗したら、結果の名前だけは送る
+        await ctx.send(selected.display_name)
 
 
 if not TOKEN:
