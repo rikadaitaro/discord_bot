@@ -2,6 +2,9 @@ import asyncio
 import json
 import os
 import random
+import io
+import math
+from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -1143,11 +1146,96 @@ async def show_order(ctx):
 
     await ctx.send("📋 担当順\n\n" + "\n".join(lines))
 
+def _roulette_font(size):
+    """日本語が描けるフォントを探す（Windows / Mac / Linux）。"""
+    candidates = [
+        "C:/Windows/Fonts/YuGothM.ttc",
+        "C:/Windows/Fonts/meiryo.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
+
+def make_roulette_gif(names, selected_index):
+    """名前が縦にスクロールして、selected_index の名前で止まるGIFを作る。
+
+    送信は1回だけ。再生は見る側のアプリがやるので、編集よりずっと滑らか。
+    ループ再生される前提で、最後に止まった状態を長めに見せる。
+    """
+    width, height = 720, 320
+    row_h = 72
+    center_y = height // 2
+    font = _roulette_font(40)
+    bg = (43, 45, 49)
+
+    # 2周回してから、選ばれた名前が中央に来る位置で止まる
+    target = len(names) * 2 + selected_index
+    frame_count = 40
+
+    frames = []
+    for i in range(frame_count):
+        p = i / (frame_count - 1)
+        eased = 1 - (1 - p) ** 3  # 最初速く、だんだん遅く
+        pos = target * eased
+
+        img = Image.new("RGB", (width, height), bg)
+        draw = ImageDraw.Draw(img)
+
+        # 中央の行のハイライト
+        draw.rounded_rectangle(
+            [60, center_y - row_h // 2, width - 60, center_y + row_h // 2],
+            radius=12,
+            outline=(255, 255, 255),
+            width=3,
+        )
+
+        base = math.floor(pos)
+        frac = pos - base
+        for k in range(-2, 3):
+            name = names[(base + k) % len(names)]
+            offset = k - frac
+            y = center_y + offset * row_h
+            # 中央から遠い名前ほど暗くする
+            brightness = max(0.3, 1 - abs(offset) * 0.32)
+            fill = tuple(int(255 * brightness) for _ in range(3))
+            bbox = draw.textbbox((0, 0), name, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            draw.text(
+                ((width - text_w) / 2, y - text_h / 2 - bbox[1]),
+                name,
+                font=font,
+                fill=fill,
+            )
+
+        frames.append(img)
+
+    buffer = io.BytesIO()
+    frames[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=[50] * (frame_count - 1) + [2000],
+        loop=0,
+    )
+    buffer.seek(0)
+    return buffer
+
 @bot.command()
 async def roulette(ctx):
-    """ランダムなメンバーの名前を、回転演出付きで出すだけ。
+    """ランダムなメンバーの名前を、GIFの回転演出で出すだけ。
 
-    担当・投票・保存は一切しない。出すのは名前だけで、メンションもしない。
+    担当・投票・保存は一切しない。GIFを1回送るだけで、編集はしない。
     """
     members = await get_valid_members(ctx.guild)
 
@@ -1155,28 +1243,16 @@ async def roulette(ctx):
         await ctx.send("候補がいません。")
         return
 
-    selected = random.choice(members)
-
     if len(members) == 1:
-        await ctx.send(selected.display_name)
+        await ctx.send(members[0].display_name)
         return
 
-    try:
-        message = await ctx.send("？？？")
-
-        # 名前だけを高速 → ゆっくりに切り替える（約3.7秒、編集7回）
-        delays = [0.2, 0.2, 0.2, 0.2, 0.25, 0.3, 0.45, 0.8, 1.0]
-        index = random.randrange(len(members))
-        for delay in delays:
-            await asyncio.sleep(delay)
-            index = (index + 1) % len(members)
-            await message.edit(content=members[index].display_name)
-
-        await asyncio.sleep(1.0)
-        await message.edit(content=selected.display_name)
-    except discord.HTTPException:
-        # 編集が失敗したら、結果の名前だけは送る
-        await ctx.send(selected.display_name)
+    selected_index = random.randrange(len(members))
+    buffer = make_roulette_gif(
+        [member.display_name for member in members],
+        selected_index,
+    )
+    await ctx.send(file=discord.File(buffer, filename="roulette.gif"))
 
 
 if not TOKEN:
