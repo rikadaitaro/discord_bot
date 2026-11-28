@@ -1396,6 +1396,20 @@ async def setorder(ctx, *members: discord.Member):
         f"{order_text}"
     )
 
+@bot2.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    text = message.content.strip()
+
+    # コマンドには「すぎ」反応をしない
+    if not text.startswith("!") and "すぎ" in text:
+        before = text.split("すぎ")[0].strip()
+        if before and len(before) <= 20:
+            await message.channel.send(f"お前{before}スギ")
+
+    await bot2.process_commands(message)
 
 @bot.command(name="order")
 async def show_order(ctx):
