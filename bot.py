@@ -1183,35 +1183,29 @@ def _roulette_font(size):
 
 
 
-def make_roulette_gif(names, selected_index):
+def make_roulette_gif(names, selected_index, is_fakeout=None):
     """名前が縦にスクロールして、selected_index の名前で止まるGIFを作る。
 
     送信は1回だけ。再生は見る側のアプリがやるので、編集よりずっと滑らか。
     ループ再生される前提で、最後に止まった状態を長めに見せる。
+    is_fakeout が None なら、確率で「Aかと思いきやB」演出になる。
     """
+    if is_fakeout is None:
+        is_fakeout = random.random() < 0.1
+
     width, height = 600, 360
     row_h = 84
     center_y = height // 2
     font = _roulette_font(56)
-
     bg = (43, 45, 49)
 
-    # 2周回してから、選ばれた名前が中央に来る位置で止まる
-    target = len(names) * 2 + selected_index
-    frame_count = 40
-
-    frames = []
-    for i in range(frame_count):
-        p = i / (frame_count - 1)
-        eased = 1 - (1 - p) ** 3  # 最初速く、だんだん遅く
-        pos = target * eased
-
+    def draw_frame(pos):
         img = Image.new("RGB", (width, height), bg)
         draw = ImageDraw.Draw(img)
 
         # 中央の行のハイライト
         draw.rounded_rectangle(
-            [60, center_y - row_h // 2, width - 60, center_y + row_h // 2],
+            [40, center_y - row_h // 2, width - 40, center_y + row_h // 2],
             radius=12,
             outline=(255, 255, 255),
             width=3,
@@ -1236,7 +1230,137 @@ def make_roulette_gif(names, selected_index):
                 fill=fill,
             )
 
-        frames.append(img)
+        return img
+
+    # 本命の位置。フェイクありなら、まず手前の人で止まったように見せる
+    end_pos = len(names) * 2 + selected_index
+    spin_target = end_pos - 1 if is_fakeout else end_pos
+    frame_count = 40
+
+    frames = []
+    durations = []
+
+    for i in range(frame_count):
+        p = i / (frame_count - 1)
+        eased = 1 - (1 - p) ** 3  # 最初速く、だんだん遅く
+        frames.append(draw_frame(spin_target * eased))
+        durations.append(50)
+
+    if is_fakeout:
+        # Aで止まったと思わせる間（0.7秒）
+        frames.append(frames[-1].copy())
+        durations.append(700)
+
+        # 本命Bの名前が枠の右端からスライドしてきて、Aを左へ押し出す。
+        # 名前は枠の内側だけで描く（はみ出した部分は切り取る）ので、
+        # 最初のフレームからBが右端に少し見えて、入ってくるのが分かる。
+        fake_name = names[(selected_index - 1) % len(names)]
+        true_name = names[selected_index]
+        slide_count = 12
+        slide_dist = 430
+        for j in range(1, slide_count + 1):
+            if j == slide_count:
+                # 最後は通常の「Bが中央」の画面にして、上下の名前も揃える
+                frames.append(draw_frame(end_pos))
+                durations.append(70)
+                break
+
+            p = j / slide_count
+            eased = p * p * (3 - 2 * p)  # 滑らかに加速して減速する
+            slide = eased * slide_dist
+
+            img = draw_frame(spin_target)
+            draw = ImageDraw.Draw(img)
+
+            # 中央の行の中身を消す
+            draw.rectangle(
+                [43, center_y - row_h // 2 + 3,
+                 width - 43, center_y + row_h // 2 - 3],
+                fill=bg,
+            )
+
+            # 名前だけを透明な帯に描いて、枠の内側の範囲だけ貼る
+            band = Image.new("RGBA", (width, row_h), (0, 0, 0, 0))
+            band_draw = ImageDraw.Draw(band)
+            for name, cx in (
+                (fake_name, width / 2 - slide),
+                (true_name, width / 2 + slide_dist - slide),
+            ):
+                bbox = band_draw.textbbox((0, 0), name, font=font)
+                text_w = bbox[2] - bbox[0]
+                text_h = bbox[3] - bbox[1]
+                band_draw.text(
+                    (cx - text_w / 2, row_h / 2 - text_h / 2 - bbox[1]),
+                    name,
+                    font=font,
+                    fill=(255, 255, 255, 255),
+                )
+            band = band.crop((43, 0, width - 43, row_h))
+            img.paste(band, (43, center_y - row_h // 2), band)
+
+            frames.append(img)
+            durations.append(70)
+
+    # --- 止まった時のエフェクト ---
+    # 中央の行が金色に光り、名前が大きくなって、紙吹雪が舞う。
+    # 最後の1枚はそのまま長く見せる（当たった人が一目で分かるように）。
+    base_img = frames[-1].copy()
+    selected_name = names[selected_index]
+    font_big = _roulette_font(68)
+    font_normal = _roulette_font(56)
+    rng = random.Random(12345)
+
+    effect_frames = []
+    for i in range(6):
+        img = base_img.copy()
+        draw = ImageDraw.Draw(img)
+
+        # 中央の行を金色で塗る（明るさを交互に変えてフラッシュさせる）
+        gold = (255, 190, 0) if i % 2 == 0 else (255, 225, 130)
+        draw.rounded_rectangle(
+            [40, center_y - row_h // 2, width - 40, center_y + row_h // 2],
+            radius=12,
+            fill=gold,
+        )
+
+        # 紙吹雪
+        for _ in range(24):
+            x = rng.randrange(width)
+            y = rng.randrange(height)
+            r = rng.randrange(2, 6)
+            color = rng.choice([
+                (255, 255, 255), (255, 190, 0),
+                (120, 200, 255), (255, 120, 180),
+            ])
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+
+        # 両側から名前を指す三角
+        draw.polygon(
+            [(14, center_y - 14), (14, center_y + 14), (36, center_y)],
+            fill=(255, 255, 255),
+        )
+        draw.polygon(
+            [(width - 14, center_y - 14), (width - 14, center_y + 14),
+             (width - 36, center_y)],
+            fill=(255, 255, 255),
+        )
+
+        # 名前を金色の上に濃い色で描き直す（大きい／通常を交互にして弾ませる）
+        effect_font = font_big if i % 2 == 0 else font_normal
+        bbox = draw.textbbox((0, 0), selected_name, font=effect_font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        draw.text(
+            ((width - text_w) / 2, center_y - text_h / 2 - bbox[1]),
+            selected_name,
+            font=effect_font,
+            fill=(50, 35, 0),
+        )
+
+        effect_frames.append(img)
+
+    frames.extend(effect_frames)
+    durations.extend([150] * (len(effect_frames) - 1) + [2000])
 
     buffer = io.BytesIO()
     frames[0].save(
@@ -1244,7 +1368,7 @@ def make_roulette_gif(names, selected_index):
         format="GIF",
         save_all=True,
         append_images=frames[1:],
-        duration=[50] * (frame_count - 1) + [2000],
+        duration=durations,
         loop=0,
     )
     buffer.seek(0)
